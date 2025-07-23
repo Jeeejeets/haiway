@@ -1,13 +1,11 @@
-from asyncio import iscoroutinefunction
-from collections.abc import Callable, Coroutine, Iterable, MutableMapping
+from collections.abc import Collection, Iterable, MutableMapping
 from contextvars import ContextVar, Token
 from threading import Lock
 from types import TracebackType
-from typing import Any, Self, cast, final, overload
+from typing import ClassVar, Self, cast
 
 from haiway.context.types import MissingContext, MissingState
-from haiway.state import State
-from haiway.utils.mimic import mimic_function
+from haiway.state import Immutable, State
 
 __all__ = (
     "ScopeState",
@@ -15,8 +13,7 @@ __all__ = (
 )
 
 
-@final
-class ScopeState:
+class ScopeState(Immutable):
     """
     Container for state objects within a scope.
 
@@ -25,45 +22,22 @@ class ScopeState:
     This class is immutable after initialization.
     """
 
-    __slots__ = (
-        "_lock",
-        "_state",
-    )
+    _state: MutableMapping[type[State], State]
+    _lock: Lock
 
     def __init__(
         self,
         state: Iterable[State],
     ) -> None:
-        self._state: MutableMapping[type[State], State]
         object.__setattr__(
             self,
             "_state",
             {type(element): element for element in state},
         )
-        self._lock: Lock
         object.__setattr__(
             self,
             "_lock",
             Lock(),
-        )
-
-    def __setattr__(
-        self,
-        name: str,
-        value: Any,
-    ) -> Any:
-        raise AttributeError(
-            f"Can't modify immutable {self.__class__.__qualname__},"
-            f" attribute - '{name}' cannot be modified"
-        )
-
-    def __delattr__(
-        self,
-        name: str,
-    ) -> None:
-        raise AttributeError(
-            f"Can't modify immutable {self.__class__.__qualname__},"
-            f" attribute - '{name}' cannot be deleted"
         )
 
     def check_state[StateType: State](
@@ -183,20 +157,17 @@ class ScopeState:
         Self
             A new ScopeState with the combined state
         """
-        if state:
-            return self.__class__(
-                [
-                    *self._state.values(),
-                    *state,
-                ]
-            )
-
-        else:
+        # Fast path: if no new state, return self
+        state_list = list(state)
+        if not state_list:
             return self
 
+        # Optimize: pre-allocate with known size and use dict comprehension
+        combined_state = {**self._state, **{type(s): s for s in state_list}}
+        return self.__class__(combined_state.values())
 
-@final
-class StateContext:
+
+class StateContext(Immutable):
     """
     Context manager for state within a scope.
 
@@ -205,7 +176,26 @@ class StateContext:
     This class is immutable after initialization.
     """
 
-    _context = ContextVar[ScopeState]("StateContext")
+    _context: ClassVar[ContextVar[ScopeState]] = ContextVar[ScopeState]("StateContext")
+
+    @classmethod
+    def current_state(cls) -> Collection[State]:
+        """
+        Return an immutable snapshot of the current state.
+
+        Returns
+        -------
+        Collection[State]
+            State objects present in the current context,
+            or an empty tuple if no context is active.
+        """
+        try:
+            scope_state: ScopeState = cls._context.get()
+            with scope_state._lock:
+                return tuple(scope_state._state.values())
+
+        except LookupError:
+            return ()  # return empty as default
 
     @classmethod
     def check_state[StateType: State](
@@ -306,51 +296,13 @@ class StateContext:
         """
         try:
             # update current scope context
-            return cls(state=cls._context.get().updated(state=state))
+            return cls(_state=cls._context.get().updated(state=state))
 
         except LookupError:  # create root scope when missing
-            return cls(state=ScopeState(state))
+            return cls(_state=ScopeState(state))
 
-    __slots__ = (
-        "_state",
-        "_token",
-    )
-
-    def __init__(
-        self,
-        state: ScopeState,
-    ) -> None:
-        self._state: ScopeState
-        object.__setattr__(
-            self,
-            "_state",
-            state,
-        )
-        self._token: Token[ScopeState] | None
-        object.__setattr__(
-            self,
-            "_token",
-            None,
-        )
-
-    def __setattr__(
-        self,
-        name: str,
-        value: Any,
-    ) -> Any:
-        raise AttributeError(
-            f"Can't modify immutable {self.__class__.__qualname__},"
-            f" attribute - '{name}' cannot be modified"
-        )
-
-    def __delattr__(
-        self,
-        name: str,
-    ) -> None:
-        raise AttributeError(
-            f"Can't modify immutable {self.__class__.__qualname__},"
-            f" attribute - '{name}' cannot be deleted"
-        )
+    _state: ScopeState
+    _token: Token[ScopeState] | None = None
 
     def __enter__(self) -> None:
         """
@@ -402,41 +354,3 @@ class StateContext:
             "_token",
             None,
         )
-
-    @overload
-    def __call__[Result, **Arguments](
-        self,
-        function: Callable[Arguments, Coroutine[Any, Any, Result]],
-    ) -> Callable[Arguments, Coroutine[Any, Any, Result]]: ...
-
-    @overload
-    def __call__[Result, **Arguments](
-        self,
-        function: Callable[Arguments, Result],
-    ) -> Callable[Arguments, Result]: ...
-
-    def __call__[Result, **Arguments](
-        self,
-        function: Callable[Arguments, Coroutine[Any, Any, Result]] | Callable[Arguments, Result],
-    ) -> Callable[Arguments, Coroutine[Any, Any, Result]] | Callable[Arguments, Result]:
-        if iscoroutinefunction(function):
-
-            async def async_context(
-                *args: Arguments.args,
-                **kwargs: Arguments.kwargs,
-            ) -> Result:
-                with self:
-                    return await function(*args, **kwargs)
-
-            return mimic_function(function, within=async_context)
-
-        else:
-
-            def sync_context(
-                *args: Arguments.args,
-                **kwargs: Arguments.kwargs,
-            ) -> Result:
-                with self:
-                    return function(*args, **kwargs)  # pyright: ignore[reportReturnType]
-
-            return mimic_function(function, within=sync_context)  # pyright: ignore[reportReturnType]

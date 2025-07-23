@@ -1,13 +1,14 @@
 from contextvars import ContextVar, Token
 from types import TracebackType
-from typing import Any, Self, final
+from typing import Any, ClassVar, Self
 from uuid import UUID, uuid4
+
+from haiway.state import Immutable
 
 __all__ = ("ScopeIdentifier",)
 
 
-@final
-class ScopeIdentifier:
+class ScopeIdentifier(Immutable):
     """
     Identifies and manages scope context identities.
 
@@ -18,7 +19,7 @@ class ScopeIdentifier:
     This class is immutable after instantiation.
     """
 
-    _context = ContextVar[Self]("ScopeIdentifier")
+    _context: ClassVar[ContextVar[Self]] = ContextVar[Self]("ScopeIdentifier")
 
     @classmethod
     def current(
@@ -30,7 +31,7 @@ class ScopeIdentifier:
     @classmethod
     def scope(
         cls,
-        label: str,
+        name: str,
         /,
     ) -> Self:
         """
@@ -41,7 +42,7 @@ class ScopeIdentifier:
 
         Parameters
         ----------
-        label: str
+        name: str
             The name of the scope
 
         Returns
@@ -58,80 +59,54 @@ class ScopeIdentifier:
 
             scope_id: UUID = uuid4()
             return cls(
-                label=label,
+                name=name,
                 scope_id=scope_id,
                 parent_id=scope_id,  # own id is parent_id for root
             )
 
         # create nested scope otherwise
         return cls(
-            label=label,
+            name=name,
             scope_id=uuid4(),
             parent_id=current.scope_id,
         )
 
-    __slots__ = (
-        "_token",
-        "label",
-        "parent_id",
-        "scope_id",
-        "unique_name",
-    )
+    parent_id: UUID
+    scope_id: UUID
+    name: str
+    unique_name: str
+    _token: Token[Self] | None = None
 
     def __init__(
         self,
         parent_id: UUID,
         scope_id: UUID,
-        label: str,
+        name: str,
     ) -> None:
-        self.parent_id: UUID
         object.__setattr__(
             self,
             "parent_id",
             parent_id,
         )
-        self.scope_id: UUID
         object.__setattr__(
             self,
             "scope_id",
             scope_id,
         )
-        self.label: str
         object.__setattr__(
             self,
-            "label",
-            label,
+            "name",
+            name,
         )
-        self.unique_name: str
         object.__setattr__(
             self,
             "unique_name",
-            f"[{label}] [{scope_id.hex}]",
+            f"[{name}] [{scope_id}]",
         )
-        self._token: Token[ScopeIdentifier] | None
         object.__setattr__(
             self,
             "_token",
             None,
-        )
-
-    def __setattr__(
-        self,
-        name: str,
-        value: Any,
-    ) -> Any:
-        raise AttributeError(
-            f"Can't modify immutable {self.__class__.__qualname__},"
-            f" attribute - '{name}' cannot be modified"
-        )
-
-    def __delattr__(
-        self,
-        name: str,
-    ) -> None:
-        raise AttributeError(
-            f"Can't modify immutable {self.__class__.__qualname__},"
-            f" attribute - '{name}' cannot be deleted"
         )
 
     @property
@@ -204,7 +179,7 @@ class ScopeIdentifier:
             If this context is not active
         """
         assert self._token is not None, "Unbalanced context enter/exit"  # nosec: B101
-        ScopeIdentifier._context.reset(self._token)
+        ScopeIdentifier._context.reset(self._token)  # pyright: ignore[reportArgumentType]
         object.__setattr__(
             self,
             "_token",
