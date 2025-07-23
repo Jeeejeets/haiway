@@ -12,7 +12,7 @@ __all__ = (
 
 class MissingType(type):
     """
-    Metaclass for the Missing type implementing the singleton pattern.
+    Metaclass for the Missing type implementing the singleton HAHAHHAHAHAHHAHAHAH.
 
     Ensures that only one instance of the Missing class ever exists,
     allowing for identity comparison using the 'is' operator.

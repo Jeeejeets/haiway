@@ -1,4 +1,5 @@
 from haiway.context import (
+    ContextPresets,
     Disposable,
     Disposables,
     MissingContext,
@@ -18,13 +19,15 @@ from haiway.helpers import (
     LoggerObservability,
     asynchronous,
     cache,
+    execute_concurrently,
     process_concurrently,
     retry,
+    stream_concurrently,
     throttle,
     timeout,
     traced,
 )
-from haiway.state import AttributePath, AttributeRequirement, State
+from haiway.state import AttributePath, AttributeRequirement, Immutable, State
 from haiway.types import (
     MISSING,
     Default,
@@ -62,12 +65,14 @@ __all__ = (
     "AsyncStream",
     "AttributePath",
     "AttributeRequirement",
+    "ContextPresets",
     "Default",
     "DefaultValue",
     "Disposable",
     "Disposables",
     "File",
     "FileAccess",
+    "Immutable",
     "LoggerObservability",
     "Missing",
     "MissingContext",
@@ -90,6 +95,7 @@ __all__ = (
     "asynchronous",
     "cache",
     "ctx",
+    "execute_concurrently",
     "getenv",
     "getenv_base64",
     "getenv_bool",
@@ -103,6 +109,7 @@ __all__ = (
     "process_concurrently",
     "retry",
     "setup_logging",
+    "stream_concurrently",
     "throttle",
     "timeout",
     "traced",
