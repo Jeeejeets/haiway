@@ -32,7 +32,7 @@ jobs:
 
       - name: Build API reference
         run: |
-          mkdir docs/api
+          mkdir -p docs/api
           make api-reference-docs-build
 
       - name: Build MkDocs site
