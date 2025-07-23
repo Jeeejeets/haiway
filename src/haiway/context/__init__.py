@@ -9,17 +9,22 @@ from haiway.context.observability import (
     ObservabilityEventRecording,
     ObservabilityLevel,
     ObservabilityLogRecording,
+    ObservabilityMetricKind,
     ObservabilityMetricRecording,
     ObservabilityScopeEntering,
     ObservabilityScopeExiting,
     ObservabilityTraceIdentifying,
 )
+from haiway.context.presets import ContextPreset
 from haiway.context.state import StateContext
 from haiway.context.types import MissingContext, MissingState
+from haiway.state import Immutable
 
 __all__ = (
+    "ContextPreset",
     "Disposable",
     "Disposables",
+    "Immutable",
     "MissingContext",
     "MissingState",
     "Observability",
@@ -29,6 +34,7 @@ __all__ = (
     "ObservabilityEventRecording",
     "ObservabilityLevel",
     "ObservabilityLogRecording",
+    "ObservabilityMetricKind",
     "ObservabilityMetricRecording",
     "ObservabilityScopeEntering",
     "ObservabilityScopeExiting",
